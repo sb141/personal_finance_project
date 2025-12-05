@@ -1,8 +1,8 @@
-# 🚀 Deployment Guide for thehindiblogs.com/pf/
+# 🚀 Deployment Guide for xyz.com/pf/
 
 This guide is for deploying the app into a **subdirectory** (`/pf/`) of your main website.
 
-*   **URL**: `https://thehindiblogs.com/pf/`
+*   **URL**: `https://xyz.com/pf/`
 *   **Infrastructure**: Hostinger Shared Hosting (inside `public_html`)
 
 ## 📁 1. Folder Structure
@@ -33,7 +33,7 @@ public_html/
 ### Step B: Build Frontend
 1.  We have updated specific configurations for this path:
     *   `vite.config.js`: `base` set to `/pf/`.
-    *   `.env.production`: `VITE_API_URL` set to `https://thehindiblogs.com/pf/api`.
+    *   `.env.production`: `VITE_API_URL` set to `https://xyz.com/pf/api`.
 2.  Run the build command:
     ```bash
     cd frontend
@@ -56,6 +56,3 @@ public_html/
       RewriteRule . /pf/index.html [L]
     </IfModule>
     ```
-
-## ✅ Done!
-Visit **[https://thehindiblogs.com/pf/](https://thehindiblogs.com/pf/)**.
