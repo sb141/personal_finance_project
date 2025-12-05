@@ -20,7 +20,7 @@ const MonthlyReport = ({ refresh }) => {
     const fetchReport = async () => {
         try {
             const response = await fetch(
-                `http://127.0.0.1:8000/reports/monthly?year=${selectedYear}&month=${selectedMonth}`
+                `${import.meta.env.VITE_API_URL}/reports/monthly?year=${selectedYear}&month=${selectedMonth}`
             );
             const data = await response.json();
             setReportData(data);

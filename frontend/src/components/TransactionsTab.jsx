@@ -24,7 +24,7 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
     const fetchTransactions = async () => {
         setLoading(true);
         try {
-            let url = 'http://127.0.0.1:8000/transactions/?limit=1000';
+            let url = `${import.meta.env.VITE_API_URL}/transactions/?limit=1000`;
 
             if (filterType === 'date' && selectedDate) {
                 // selectedDate is likely YYYY-MM-DD from input type="date"
@@ -52,7 +52,7 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
             return;
         }
         try {
-            const response = await fetch(`http://127.0.0.1:8000/transactions/${id}`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/transactions/${id}`, {
                 method: 'DELETE',
             });
             if (response.ok) {
@@ -71,7 +71,7 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
             // We need to make sure we send a valid date string.
             // backend expects 'date' field in body.
 
-            const response = await fetch(`http://127.0.0.1:8000/transactions/${editingTx.id}`, {
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/transactions/${editingTx.id}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
