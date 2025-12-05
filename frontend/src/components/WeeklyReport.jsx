@@ -17,7 +17,7 @@ const WeeklyReport = ({ refresh }) => {
 
     const fetchReport = async () => {
         try {
-            const response = await fetch('http://127.0.0.1:8000/reports/weekly');
+            const response = await fetch(`${import.meta.env.VITE_API_URL}/reports/weekly`);
             const data = await response.json();
             setReportData(data);
 
