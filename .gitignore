@@ -50,3 +50,6 @@ dist-ssr/
 
 # Vite
 .vite/
+
+# Sqllit DB
+backend/personal_finance.db
