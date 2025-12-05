@@ -48,22 +48,25 @@ function authenticate($pdo) {
 // PUBLIC ROUTES (No Auth Required)
 // ---------------------------------------------------------
 
-// 1. POST /register
-if ($request_method === 'POST' && strpos($path, '/register') !== false) {
+
+// 1. POST /auth/register
+if ($request_method === 'POST' && strpos($path, '/auth/register') !== false) {
     $input = json_decode(file_get_contents('php://input'), true);
     
     if (!isset($input['username']) || !isset($input['password'])) {
         http_response_code(400);
-        echo json_encode(['error' => 'Missing username or password']);
+        echo json_encode(['detail' => 'Missing username or password']);
         exit;
     }
+
+
 
     // Check if user already exists
     $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
     $stmt->execute([$input['username']]);
     if ($stmt->fetch()) {
         http_response_code(409); // Conflict
-        echo json_encode(['error' => 'Username already taken']);
+        echo json_encode(['detail' => 'Username already taken']);
         exit;
     }
 
@@ -75,13 +78,13 @@ if ($request_method === 'POST' && strpos($path, '/register') !== false) {
         echo json_encode(['message' => 'User registered successfully']);
     } catch (Exception $e) {
         http_response_code(500);
-        echo json_encode(['error' => 'Registration failed']);
+        echo json_encode(['detail' => 'Registration failed']);
     }
     exit;
 }
 
-// 2. POST /login
-if ($request_method === 'POST' && strpos($path, '/login') !== false) {
+// 2. POST /auth/login
+if ($request_method === 'POST' && strpos($path, '/auth/login') !== false) {
     $input = json_decode(file_get_contents('php://input'), true);
     
     $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
@@ -105,7 +108,7 @@ if ($request_method === 'POST' && strpos($path, '/login') !== false) {
         ]);
     } else {
         http_response_code(401);
-        echo json_encode(['error' => 'Invalid credentials']);
+        echo json_encode(['detail' => 'Invalid credentials']);
     }
     exit;
 }

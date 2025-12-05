@@ -7,6 +7,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import models, schemas, database
+from routers.auth import get_current_user
 
 router = APIRouter()
 
@@ -18,16 +19,32 @@ def get_db():
         db.close()
 
 @router.post("/transactions/", response_model=schemas.TransactionResponse)
-def create_transaction(transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
-    db_transaction = models.Transaction(**transaction.dict())
+def create_transaction(
+    transaction: schemas.TransactionCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_transaction = models.Transaction(
+        **transaction.dict(),
+        user_id=current_user.id
+    )
     db.add(db_transaction)
     db.commit()
     db.refresh(db_transaction)
     return db_transaction
 
 @router.put("/transactions/{transaction_id}", response_model=schemas.TransactionResponse)
-def update_transaction(transaction_id: int, transaction: schemas.TransactionCreate, db: Session = Depends(get_db)):
-    db_transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+def update_transaction(
+    transaction_id: int, 
+    transaction: schemas.TransactionCreate, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    db_transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id,
+        models.Transaction.user_id == current_user.id
+    ).first()
+    
     if db_transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
@@ -45,9 +62,10 @@ def read_transactions(
     year: int = None,
     month: int = None,
     date: str = None, # YYYY-MM-DD
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
 ):
-    query = db.query(models.Transaction)
+    query = db.query(models.Transaction).filter(models.Transaction.user_id == current_user.id)
     
     if date:
         # Filter by specific date
@@ -65,7 +83,10 @@ def read_transactions(
     return transactions
 
 @router.get("/reports/weekly")
-def get_weekly_report(db: Session = Depends(get_db)):
+def get_weekly_report(
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     # Simple weekly report: Last 7 days aggregation
     today = datetime.utcnow()
     seven_days_ago = today - timedelta(days=7)
@@ -75,11 +96,12 @@ def get_weekly_report(db: Session = Depends(get_db)):
         models.Transaction.date,
         models.Transaction.type,
         models.Transaction.amount
-    ).filter(models.Transaction.date >= seven_days_ago).all()
+    ).filter(
+        models.Transaction.user_id == current_user.id,
+        models.Transaction.date >= seven_days_ago
+    ).all()
 
-    # Process data for frontend (e.g., group by day)
-    # Return structure: [{date: "YYYY-MM-DD", credit: 100, debit: 50}, ...]
-    
+    # Process data for frontend
     report_data = {}
     
     for date, type, amount in results:
@@ -95,7 +117,12 @@ def get_weekly_report(db: Session = Depends(get_db)):
     return list(report_data.values())
 
 @router.get("/reports/monthly")
-def get_monthly_report(year: int = None, month: int = None, db: Session = Depends(get_db)):
+def get_monthly_report(
+    year: int = None, 
+    month: int = None, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
     # If no year/month provided, use current month
     if year is None or month is None:
         today = datetime.utcnow()
@@ -114,6 +141,7 @@ def get_monthly_report(year: int = None, month: int = None, db: Session = Depend
         models.Transaction.type,
         models.Transaction.amount
     ).filter(
+        models.Transaction.user_id == current_user.id,
         models.Transaction.date >= first_day,
         models.Transaction.date <= last_day
     ).all()
@@ -134,8 +162,16 @@ def get_monthly_report(year: int = None, month: int = None, db: Session = Depend
     return list(report_data.values())
 
 @router.delete("/transactions/{transaction_id}")
-def delete_transaction(transaction_id: int, db: Session = Depends(get_db)):
-    transaction = db.query(models.Transaction).filter(models.Transaction.id == transaction_id).first()
+def delete_transaction(
+    transaction_id: int, 
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(get_current_user)
+):
+    transaction = db.query(models.Transaction).filter(
+        models.Transaction.id == transaction_id,
+        models.Transaction.user_id == current_user.id
+    ).first()
+    
     if transaction is None:
         raise HTTPException(status_code=404, detail="Transaction not found")
     
