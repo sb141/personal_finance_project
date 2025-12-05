@@ -42,7 +42,7 @@ cd backend
 uv sync
 
 # Run the server
-uv run uvicorn main:app --reload
+uv run python -m uvicorn main:app --reload
 ```
 The backend API will be available at `http://localhost:8000`.
 
