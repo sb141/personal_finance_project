@@ -9,6 +9,7 @@ import {
     Legend,
     ResponsiveContainer,
 } from 'recharts';
+import api from '../services/api';
 
 const MonthlyReport = ({ refresh }) => {
     const [reportData, setReportData] = useState([]);
@@ -19,10 +20,10 @@ const MonthlyReport = ({ refresh }) => {
 
     const fetchReport = async () => {
         try {
-            const response = await fetch(
-                `${import.meta.env.VITE_API_URL}/reports/monthly?year=${selectedYear}&month=${selectedMonth}`
-            );
-            const data = await response.json();
+            const response = await api.get('/reports/monthly', {
+                params: { year: selectedYear, month: selectedMonth }
+            });
+            const data = response.data;
             setReportData(data);
 
             // Calculate summary

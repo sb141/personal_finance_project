@@ -1,48 +1,104 @@
-# 🔙 Personal Finance API
+# FastAPI Backend with Authentication
 
-This is the backend service for the Personal Finance Tracker, built with **FastAPI**. It manages the SQLite database and provides RESTful endpoints for the frontend.
+This is the FastAPI version of the Personal Finance API with full authentication and multi-user support.
 
-We use **[uv](https://github.com/astral-sh/uv)** for high-performance dependency management.
+## Features
 
-## ⚙️ Setup & Installation
+- ✅ User registration and login
+- ✅ Token-based authentication (Bearer tokens)
+- ✅ Multi-user data isolation
+- ✅ Full CRUD operations for transactions
+- ✅ Weekly and monthly reports
+- ✅ SQLite database with SQLAlchemy ORM
 
-1.  **Navigate to the backend directory:**
-    ```bash
-    cd backend
-    ```
+## Setup
 
-2.  **Install dependencies and sync environment:**
-    ```bash
-    uv sync
-    ```
-    This command will create the virtual environment (`.venv`) and install all required packages defined in `pyproject.toml` or `uv.lock`.
+### 1. Install uv (if not already installed)
 
-3.  **Run the server:**
-    ```bash
-    uv run uvicorn main:app --reload
-    ```
-    The server will start at `http://127.0.0.1:8000`.
+```bash
+# Windows (PowerShell)
+powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
 
-    > 📘 **Interactive Docs:** Visit **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)** to explore and test the API endpoints interactively.
+# macOS/Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
 
-## 📚 API Endpoints
+### 2. Install Dependencies
 
-### Transactions
+```bash
+cd backend
+uv pip install -r requirements.txt
+```
 
-*   **`POST /transactions/`**: Create a new transaction.
-    *   Body: `{ "date": "YYYY-MM-DD", "amount": 100.0, "type": "credit/debit", "category": "Food", "description": "..." }`
-*   **`GET /transactions/`**: Retrieve a list of transactions.
-    *   Query Params: `skip`, `limit`, `year`, `month`, `date`.
-*   **`PUT /transactions/{id}`**: Update an existing transaction.
-*   **`DELETE /transactions/{id}`**: Delete a transaction.
+### 3. Run the Server
 
-### Reports
+```bash
+uv run python -m uvicorn main:app --reload
+```
 
-*   **`GET /reports/weekly`**: Get aggregated credit/debit data for the last 7 days.
-*   **`GET /reports/monthly`**: Get aggregated credit/debit data for a specific month (defaults to current).
+The API will be available at `http://localhost:8000`
 
-## 🗄️ Database
+### 4. API Documentation
 
-The project uses **SQLite**.
-*   The database file `personal_finance.db` is automatically created in the `backend/` directory upon the first run.
-*   **SQLAlchemy** is used as the ORM to manage `Transaction` models.
+Visit `http://localhost:8000/docs` for interactive API documentation (Swagger UI)
+
+## API Endpoints
+
+### Authentication (Public)
+- `POST /auth/register` - Register a new user
+- `POST /auth/login` - Login and get auth token
+
+### Transactions (Protected - Requires Bearer Token)
+- `GET /transactions/` - Get user's transactions (with optional filters)
+- `POST /transactions/` - Create a new transaction
+- `PUT /transactions/{id}` - Update a transaction
+- `DELETE /transactions/{id}` - Delete a transaction
+
+### Reports (Protected)
+- `GET /reports/weekly` - Get weekly report
+- `GET /reports/monthly?year=2025&month=12` - Get monthly report
+
+## Authentication
+
+All protected endpoints require a Bearer token in the Authorization header:
+
+```
+Authorization: Bearer <your_token_here>
+```
+
+The frontend automatically handles this via the `api.js` interceptor.
+
+## Database
+
+The app uses SQLite by default (`finance.db`). The database is created automatically on first run.
+
+### Models
+
+**User**
+- id (Primary Key)
+- username (Unique)
+- password_hash
+- api_token
+- created_at
+
+**Transaction**
+- id (Primary Key)
+- user_id (Foreign Key to User)
+- amount
+- type (credit/debit)
+- category
+- description
+- date
+
+## Frontend Integration
+
+The frontend is already configured to work with this backend. Just make sure:
+1. `.env` has `VITE_API_URL=http://localhost:8000`
+2. The frontend uses the `api` instance from `services/api.js` (already done)
+
+## Notes
+
+- Passwords are hashed using bcrypt
+- Tokens are generated using secure random strings
+- Each user can only access their own transactions
+- CORS is configured for localhost development

@@ -13,6 +13,7 @@ class TransactionCreate(TransactionBase):
 
 class TransactionResponse(TransactionBase):
     id: int
+    user_id: int
     date: datetime
 
     class Config:

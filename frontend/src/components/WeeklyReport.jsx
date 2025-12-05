@@ -9,6 +9,7 @@ import {
     Legend,
     ResponsiveContainer,
 } from 'recharts';
+import api from '../services/api';
 
 const WeeklyReport = ({ refresh }) => {
     const [reportData, setReportData] = useState([]);
@@ -17,8 +18,8 @@ const WeeklyReport = ({ refresh }) => {
 
     const fetchReport = async () => {
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/reports/weekly`);
-            const data = await response.json();
+            const response = await api.get('/reports/weekly');
+            const data = response.data;
             setReportData(data);
 
             // Calculate summary

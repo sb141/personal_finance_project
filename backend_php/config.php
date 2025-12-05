@@ -42,14 +42,27 @@ try {
     // Create Table if not exists (Auto-setup)
     $sql = "CREATE TABLE IF NOT EXISTS transactions (
         id INT AUTO_INCREMENT PRIMARY KEY,
+        user_id INT NOT NULL,
         date DATE NOT NULL,
         amount DECIMAL(10, 2) NOT NULL,
         type ENUM('credit', 'debit') NOT NULL,
         category VARCHAR(255),
-        description TEXT
+        description TEXT,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        INDEX idx_user_id (user_id),
+        INDEX idx_date (date)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
-    
     $pdo->exec($sql);
+
+    // Create Users Table
+    $sql_users = "CREATE TABLE IF NOT EXISTS users (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        username VARCHAR(50) NOT NULL UNIQUE,
+        password_hash VARCHAR(255) NOT NULL,
+        api_token VARCHAR(255),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
+    $pdo->exec($sql_users);
     
 } catch(PDOException $e) {
     http_response_code(500);
