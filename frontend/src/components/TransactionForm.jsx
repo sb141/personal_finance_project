@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import api from '../services/api';
 
 const TransactionForm = ({ onTransactionAdded }) => {
     // Helper to get today's date in DD/MM/YYYY format
@@ -44,28 +45,20 @@ const TransactionForm = ({ onTransactionAdded }) => {
         }
 
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/transactions/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    ...formData,
-                    amount: parseFloat(formData.amount),
-                    date: isoDate,
-                }),
+            await api.post('/transactions/', {
+                ...formData,
+                amount: parseFloat(formData.amount),
+                date: isoDate,
             });
 
-            if (response.ok) {
-                setFormData({
-                    amount: '',
-                    type: 'debit',
-                    category: '',
-                    description: '',
-                    date: getTodayString(),
-                });
-                if (onTransactionAdded) onTransactionAdded();
-            }
+            setFormData({
+                amount: '',
+                type: 'debit',
+                category: '',
+                description: '',
+                date: getTodayString(),
+            });
+            if (onTransactionAdded) onTransactionAdded();
         } catch (error) {
             console.error('Error creating transaction:', error);
         } finally {

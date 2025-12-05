@@ -7,68 +7,134 @@ header("Cache-Control: no-cache, no-store, must-revalidate");
 header("Pragma: no-cache");
 header("Expires: 0");
 
-// Parse the Request URL
-// We assume .htaccess rewrites everything to api.php?path=... OR we parse REQUEST_URI directly
-// Let's rely on REQUEST_URI to be robust.
-
+// Parse Request
 $request_method = $_SERVER['REQUEST_METHOD'];
-$base_path = dirname($_SERVER['SCRIPT_NAME']);
 $path = parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH);
 
-// Remove query string if any (parsed above) and trim slashes
-// If script is at /api.php, and request is /transactions, we want to match 'transactions'
-// But if using .htaccess rewrite to root, valid requests look like /transactions
-
-// Quick heuristic: checks if string ends with specific keywords
-function isRoute($path, $route) {
-    // Check if path equals route (ignoring trailing slash)
-    $clean_path = rtrim($path, '/');
-    $clean_route = rtrim($route, '/');
-    
-    // Check simple match
-    if (str_ends_with($clean_path, $clean_route)) {
-        return true;
-    }
-    return false;
-}
-
-// Extract ID from path if present (e.g. /transactions/15)
+// Helper functions
 function getIdFromPath($path) {
     preg_match('/transactions\/(\d+)/', $path, $matches);
     return isset($matches[1]) ? (int)$matches[1] : null;
 }
 
+// Authentication Middleware
+function authenticate($pdo) {
+    $headers = getallheaders();
+    $authHeader = isset($headers['Authorization']) ? $headers['Authorization'] : '';
+    
+    // Support non-Apache execution environments where getallheaders() might be missing
+    if (!$authHeader && isset($_SERVER['HTTP_AUTHORIZATION'])) {
+        $authHeader = $_SERVER['HTTP_AUTHORIZATION'];
+    }
+
+    if (preg_match('/Bearer\s(\S+)/', $authHeader, $matches)) {
+        $token = $matches[1];
+        
+        $stmt = $pdo->prepare("SELECT * FROM users WHERE api_token = ?");
+        $stmt->execute([$token]);
+        $user = $stmt->fetch();
+        
+        if ($user) {
+            return $user;
+        }
+    }
+    
+    http_response_code(401);
+    echo json_encode(['error' => 'Unauthorized']);
+    exit;
+}
+
 // ---------------------------------------------------------
-// ROUTER LOGIC
+// PUBLIC ROUTES (No Auth Required)
 // ---------------------------------------------------------
 
-// 1. GET /transactions/
+// 1. POST /register
+if ($request_method === 'POST' && strpos($path, '/register') !== false) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['username']) || !isset($input['password'])) {
+        http_response_code(400);
+        echo json_encode(['error' => 'Missing username or password']);
+        exit;
+    }
+
+    // Check if user already exists
+    $stmt = $pdo->prepare("SELECT id FROM users WHERE username = ?");
+    $stmt->execute([$input['username']]);
+    if ($stmt->fetch()) {
+        http_response_code(409); // Conflict
+        echo json_encode(['error' => 'Username already taken']);
+        exit;
+    }
+
+    $password_hash = password_hash($input['password'], PASSWORD_DEFAULT);
+    
+    try {
+        $stmt = $pdo->prepare("INSERT INTO users (username, password_hash) VALUES (?, ?)");
+        $stmt->execute([$input['username'], $password_hash]);
+        echo json_encode(['message' => 'User registered successfully']);
+    } catch (Exception $e) {
+        http_response_code(500);
+        echo json_encode(['error' => 'Registration failed']);
+    }
+    exit;
+}
+
+// 2. POST /login
+if ($request_method === 'POST' && strpos($path, '/login') !== false) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
+    $stmt->execute([$input['username']]);
+    $user = $stmt->fetch();
+    
+    if ($user && password_verify($input['password'], $user['password_hash'])) {
+        // Generate new token (simple random string for shared hosting compatibility)
+        $token = bin2hex(random_bytes(32));
+        
+        // Update user token
+        $update = $pdo->prepare("UPDATE users SET api_token = ? WHERE id = ?");
+        $update->execute([$token, $user['id']]);
+        
+        echo json_encode([
+            'token' => $token,
+            'user' => [
+                'id' => $user['id'],
+                'username' => $user['username']
+            ]
+        ]);
+    } else {
+        http_response_code(401);
+        echo json_encode(['error' => 'Invalid credentials']);
+    }
+    exit;
+}
+
+// ---------------------------------------------------------
+// PROTECTED ROUTES (Auth Required)
+// ---------------------------------------------------------
+
+// Require authentication for everything below
+$currentUser = authenticate($pdo);
+
+// 3. GET /transactions/
 if ($request_method === 'GET' && strpos($path, '/transactions') !== false && !getIdFromPath($path)) {
     $limit = isset($_GET['limit']) ? (int)$_GET['limit'] : 100;
-    $skip = isset($_GET['skip']) ? (int)$_GET['skip'] : 0;
     
-    $where = [];
-    $params = [];
+    $where = ['user_id = ?'];
+    $params = [$currentUser['id']];
     
-    // Date filter (YYYY-MM-DD)
     if (isset($_GET['date']) && !empty($_GET['date'])) {
         $where[] = "date = ?";
         $params[] = $_GET['date'];
-    } 
-    // Month/Year filter
-    elseif (isset($_GET['year']) && isset($_GET['month'])) {
-        $year = (int)$_GET['year'];
-        $month = (int)$_GET['month'];
+    } elseif (isset($_GET['year']) && isset($_GET['month'])) {
         $where[] = "YEAR(date) = ? AND MONTH(date) = ?";
-        $params[] = $year;
-        $params[] = $month;
+        $params[] = (int)$_GET['year'];
+        $params[] = (int)$_GET['month'];
     }
     
-    $sql = "SELECT * FROM transactions";
-    if (!empty($where)) {
-        $sql .= " WHERE " . implode(" AND ", $where);
-    }
-    $sql .= " ORDER BY date DESC LIMIT $limit OFFSET $skip";
+    $sql = "SELECT * FROM transactions WHERE " . implode(" AND ", $where);
+    $sql .= " ORDER BY date DESC LIMIT $limit";
     
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
@@ -76,20 +142,13 @@ if ($request_method === 'GET' && strpos($path, '/transactions') !== false && !ge
     exit;
 }
 
-// 2. POST /transactions/
+// 4. POST /transactions/
 if ($request_method === 'POST' && strpos($path, '/transactions') !== false) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    // Basic validation
-    if (!isset($input['amount']) || !isset($input['date']) || !isset($input['type'])) {
-        http_response_code(400);
-        echo json_encode(['error' => 'Missing required fields']);
-        exit;
-    }
-    
-    $sql = "INSERT INTO transactions (date, amount, type, category, description) VALUES (?, ?, ?, ?, ?)";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdo->prepare("INSERT INTO transactions (user_id, date, amount, type, category, description) VALUES (?, ?, ?, ?, ?, ?)");
     $stmt->execute([
+        $currentUser['id'],
         $input['date'],
         $input['amount'],
         $input['type'],
@@ -97,20 +156,17 @@ if ($request_method === 'POST' && strpos($path, '/transactions') !== false) {
         isset($input['description']) ? $input['description'] : ''
     ]);
     
-    $id = $pdo->lastInsertId();
-    $input['id'] = $id;
+    $input['id'] = $pdo->lastInsertId();
     echo json_encode($input);
     exit;
 }
 
-// 3. PUT /transactions/{id}
+// 5. UPDATE /transactions/{id}
 if ($request_method === 'PUT' && ($id = getIdFromPath($path))) {
     $input = json_decode(file_get_contents('php://input'), true);
     
-    // We need to build a dynamic update query
     $fields = [];
     $params = [];
-    
     foreach (['date', 'amount', 'type', 'category', 'description'] as $col) {
         if (isset($input[$col])) {
             $fields[] = "$col = ?";
@@ -118,82 +174,56 @@ if ($request_method === 'PUT' && ($id = getIdFromPath($path))) {
         }
     }
     
-    if (empty($fields)) {
-        echo json_encode(['message' => 'No fields to update']);
-        exit;
+    if (!empty($fields)) {
+        $sql = "UPDATE transactions SET " . implode(", ", $fields) . " WHERE id = ? AND user_id = ?";
+        $params[] = $id;
+        $params[] = $currentUser['id'];
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
     }
     
-    $sql = "UPDATE transactions SET " . implode(", ", $fields) . " WHERE id = ?";
-    $params[] = $id;
-    
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute($params);
-    
-    // Return updated
     $input['id'] = $id;
     echo json_encode($input);
     exit;
 }
 
-// 4. DELETE /transactions/{id}
+// 6. DELETE /transactions/{id}
 if ($request_method === 'DELETE' && ($id = getIdFromPath($path))) {
-    $stmt = $pdo->prepare("DELETE FROM transactions WHERE id = ?");
-    $stmt->execute([$id]);
-    echo json_encode(['message' => 'Deleted successfully', 'id' => $id]);
+    $stmt = $pdo->prepare("DELETE FROM transactions WHERE id = ? AND user_id = ?");
+    $stmt->execute([$id, $currentUser['id']]);
+    echo json_encode(['message' => 'Deleted successfully']);
     exit;
 }
 
-// 5. GET /reports/weekly
+// 7. GET /reports/weekly
 if ($request_method === 'GET' && strpos($path, '/reports/weekly') !== false) {
-    // Last 7 days
-    $stmt = $pdo->query("
-        SELECT date, type, amount 
-        FROM transactions 
-        WHERE date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)
-    ");
-    $results = $stmt->fetchAll();
-    
-    $report = []; // Keyed by date
-    foreach ($results as $row) {
-        $date = $row['date'];
-        if (!isset($report[$date])) {
-            $report[$date] = ['date' => $date, 'credit' => 0, 'debit' => 0];
-        }
-        if ($row['type'] == 'credit') $report[$date]['credit'] += (float)$row['amount'];
-        if ($row['type'] == 'debit') $report[$date]['debit'] += (float)$row['amount'];
-    }
-    
-    echo json_encode(array_values($report));
+    $stmt = $pdo->prepare("SELECT date, type, amount FROM transactions WHERE user_id = ? AND date >= DATE_SUB(CURDATE(), INTERVAL 7 DAY)");
+    $stmt->execute([$currentUser['id']]);
+    echo json_encode(processReports($stmt->fetchAll()));
     exit;
 }
 
-// 6. GET /reports/monthly
+// 8. GET /reports/monthly
 if ($request_method === 'GET' && strpos($path, '/reports/monthly') !== false) {
     $year = isset($_GET['year']) ? (int)$_GET['year'] : date('Y');
     $month = isset($_GET['month']) ? (int)$_GET['month'] : date('m');
-    
-    $stmt = $pdo->prepare("
-        SELECT date, type, amount 
-        FROM transactions 
-        WHERE YEAR(date) = ? AND MONTH(date) = ?
-    ");
-    $stmt->execute([$year, $month]);
-    $results = $stmt->fetchAll();
-    
-    $report = []; 
-    foreach ($results as $row) {
-        $date = $row['date'];
-        if (!isset($report[$date])) {
-            $report[$date] = ['date' => $date, 'credit' => 0, 'debit' => 0];
-        }
-        if ($row['type'] == 'credit') $report[$date]['credit'] += (float)$row['amount'];
-        if ($row['type'] == 'debit') $report[$date]['debit'] += (float)$row['amount'];
-    }
-    
-    echo json_encode(array_values($report));
+    $stmt = $pdo->prepare("SELECT date, type, amount FROM transactions WHERE user_id = ? AND YEAR(date) = ? AND MONTH(date) = ?");
+    $stmt->execute([$currentUser['id'], $year, $month]);
+    echo json_encode(processReports($stmt->fetchAll()));
     exit;
 }
 
+function processReports($results) {
+    $report = [];
+    foreach ($results as $row) {
+        $date = $row['date'];
+        if (!isset($report[$date])) $report[$date] = ['date' => $date, 'credit' => 0, 'debit' => 0];
+        if ($row['type'] == 'credit') $report[$date]['credit'] += (float)$row['amount'];
+        if ($row['type'] == 'debit') $report[$date]['debit'] += (float)$row['amount'];
+    }
+    return array_values($report);
+}
+
 http_response_code(404);
-echo json_encode(['error' => 'Endpoint not found', 'path' => $path]);
+echo json_encode(['error' => 'Endpoint not found']);
 ?>

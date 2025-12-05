@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import api from '../services/api';
 
 const TransactionsTab = ({ refresh, onTransactionChange }) => {
     const [transactions, setTransactions] = useState([]);
@@ -24,20 +25,20 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
     const fetchTransactions = async () => {
         setLoading(true);
         try {
-            let url = `${import.meta.env.VITE_API_URL}/transactions/?limit=1000`;
+            const params = { limit: 1000 };
 
             if (filterType === 'date' && selectedDate) {
-                // selectedDate is likely YYYY-MM-DD from input type="date"
-                url += `&date=${selectedDate}`;
+                params.date = selectedDate;
             } else if (filterType === 'month') {
-                url += `&month=${selectedMonth}&year=${selectedYear}`;
+                params.month = selectedMonth;
+                params.year = selectedYear;
             }
 
-            const response = await fetch(url);
-            const data = await response.json();
-            setTransactions(data);
+            const response = await api.get('/transactions/', { params });
+            setTransactions(Array.isArray(response.data) ? response.data : []);
         } catch (error) {
             console.error('Error fetching transactions:', error);
+            setTransactions([]); // Set empty array on error
         } finally {
             setLoading(false);
         }
@@ -47,18 +48,15 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
         fetchTransactions();
     }, [filterType, selectedDate, selectedMonth, selectedYear, refresh]);
 
+
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this transaction?')) {
             return;
         }
         try {
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/transactions/${id}`, {
-                method: 'DELETE',
-            });
-            if (response.ok) {
-                fetchTransactions();
-                if (onTransactionChange) onTransactionChange();
-            }
+            await api.delete(`/transactions/${id}`);
+            fetchTransactions();
+            if (onTransactionChange) onTransactionChange();
         } catch (error) {
             alert('Failed to delete transaction');
         }
@@ -67,29 +65,17 @@ const TransactionsTab = ({ refresh, onTransactionChange }) => {
     const handleUpdate = async (e) => {
         e.preventDefault();
         try {
-            // format date to YYYY-MM-DD if needed, but editingTx.date is usually ISO
-            // We need to make sure we send a valid date string.
-            // backend expects 'date' field in body.
-
-            const response = await fetch(`${import.meta.env.VITE_API_URL}/transactions/${editingTx.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    amount: parseFloat(editingTx.amount),
-                    type: editingTx.type,
-                    category: editingTx.category,
-                    description: editingTx.description,
-                    date: editingTx.date, // Assuming ISO string or valid format
-                }),
+            await api.put(`/transactions/${editingTx.id}`, {
+                amount: parseFloat(editingTx.amount),
+                type: editingTx.type,
+                category: editingTx.category,
+                description: editingTx.description,
+                date: editingTx.date,
             });
 
-            if (response.ok) {
-                setEditingTx(null);
-                fetchTransactions();
-                if (onTransactionChange) onTransactionChange();
-            } else {
-                alert('Failed to update transaction');
-            }
+            setEditingTx(null);
+            fetchTransactions();
+            if (onTransactionChange) onTransactionChange();
         } catch (error) {
             console.error(error);
             alert('Error updating transaction');
