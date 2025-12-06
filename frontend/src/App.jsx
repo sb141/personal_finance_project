@@ -21,19 +21,19 @@ const Dashboard = () => {
     <div className="min-h-screen py-8 px-4">
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <header className="text-center mb-8 animate-slide-in relative">
-          <div className="absolute right-0 top-0">
+        <header className="text-center mb-8 animate-slide-in">
+          <div className="flex flex-col items-center gap-4 mb-4">
+            <h1 className="text-4xl md:text-5xl font-bold text-white">
+              💎 Personal Finance Tracker
+            </h1>
             <button
               onClick={logout}
-              className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-4 rounded-lg backdrop-blur-sm transition-all"
+              className="bg-white/20 hover:bg-white/30 text-white font-semibold py-2 px-6 rounded-lg backdrop-blur-sm transition-all text-sm md:text-base"
             >
               Sign Out ({user?.username})
             </button>
           </div>
-          <h1 className="text-5xl font-bold text-white mb-3">
-            💎 Personal Finance Tracker
-          </h1>
-          <p className="text-white text-lg opacity-90">
+          <p className="text-white text-base md:text-lg opacity-90">
             Track your income and expenses with style
           </p>
         </header>
