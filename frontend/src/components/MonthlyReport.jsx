@@ -75,13 +75,13 @@ const MonthlyReport = ({ refresh }) => {
         <div className="space-y-6">
             {/* Month/Year Selector */}
             <div className="card">
-                <div className="flex items-center justify-between mb-4">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4">
                     <h2 className="text-2xl font-bold gradient-text">Monthly Report</h2>
-                    <div className="flex gap-3">
+                    <div className="flex gap-2 md:gap-3 flex-wrap">
                         <select
                             value={selectedMonth}
                             onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                            className="px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                            className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm md:text-base"
                         >
                             {months.map((month, index) => (
                                 <option key={month} value={index + 1}>
@@ -92,7 +92,7 @@ const MonthlyReport = ({ refresh }) => {
                         <select
                             value={selectedYear}
                             onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                            className="px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none"
+                            className="flex-1 md:flex-none px-3 md:px-4 py-2 rounded-lg border-2 border-gray-200 focus:border-purple-500 focus:outline-none text-sm md:text-base"
                         >
                             {years.map((year) => (
                                 <option key={year} value={year}>
