@@ -10,6 +10,8 @@ class User(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     api_token = Column(String, unique=True, nullable=True, index=True)
+    reset_token = Column(String, unique=True, nullable=True, index=True)
+    reset_token_expiry = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     
     transactions = relationship("Transaction", back_populates="user")

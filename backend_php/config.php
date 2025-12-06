@@ -60,6 +60,8 @@ try {
         username VARCHAR(50) NOT NULL UNIQUE,
         password_hash VARCHAR(255) NOT NULL,
         api_token VARCHAR(255),
+        reset_token VARCHAR(255),
+        reset_token_expiry DATETIME,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;";
     $pdo->exec($sql_users);

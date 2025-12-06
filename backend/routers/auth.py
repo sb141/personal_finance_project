@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from passlib.context import CryptContext
 import secrets
+from datetime import datetime, timedelta
 from database import get_db
 from models import User
 
@@ -19,9 +20,19 @@ class UserLogin(BaseModel):
     username: str
     password: str
 
+class ForgotPasswordRequest(BaseModel):
+    username: str
+
+class ResetPasswordRequest(BaseModel):
+    reset_token: str
+    new_password: str
+
 class Token(BaseModel):
     token: str
     user: dict
+
+class MessageResponse(BaseModel):
+    message: str
 
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
@@ -100,3 +111,50 @@ def login(user_data: UserLogin, db: Session = Depends(get_db)):
             "username": user.username
         }
     }
+
+@router.post("/forgot-password", response_model=MessageResponse)
+def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
+    """Generate a password reset token for the user"""
+    user = db.query(User).filter(User.username == request.username).first()
+    
+    # Always return success to prevent username enumeration
+    if not user:
+        return {"message": "If the username exists, a reset token has been generated. In production, this would be sent via email."}
+    
+    # Generate reset token (valid for 1 hour)
+    reset_token = generate_token()
+    user.reset_token = reset_token
+    user.reset_token_expiry = datetime.utcnow() + timedelta(hours=1)
+    db.commit()
+    
+    # In production, send this token via email
+    # For now, we'll return it in the response (NOT SECURE for production!)
+    return {
+        "message": f"Password reset token: {reset_token} (valid for 1 hour). In production, this would be sent via email to the user."
+    }
+
+@router.post("/reset-password", response_model=MessageResponse)
+def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
+    """Reset password using the reset token"""
+    user = db.query(User).filter(User.reset_token == request.reset_token).first()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid or expired reset token"
+        )
+    
+    # Check if token is expired
+    if user.reset_token_expiry < datetime.utcnow():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Reset token has expired"
+        )
+    
+    # Update password
+    user.password_hash = hash_password(request.new_password)
+    user.reset_token = None
+    user.reset_token_expiry = None
+    db.commit()
+    
+    return {"message": "Password has been reset successfully"}

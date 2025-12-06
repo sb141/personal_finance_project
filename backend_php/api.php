@@ -113,6 +113,76 @@ if ($request_method === 'POST' && strpos($path, '/auth/login') !== false) {
     exit;
 }
 
+// 3. POST /auth/forgot-password
+if ($request_method === 'POST' && strpos($path, '/auth/forgot-password') !== false) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['username'])) {
+        http_response_code(400);
+        echo json_encode(['detail' => 'Username is required']);
+        exit;
+    }
+    
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE username = ?");
+    $stmt->execute([$input['username']]);
+    $user = $stmt->fetch();
+    
+    // Always return success to prevent username enumeration
+    if (!$user) {
+        echo json_encode(['message' => 'If the username exists, a reset token has been generated. In production, this would be sent via email.']);
+        exit;
+    }
+    
+    // Generate reset token (valid for 1 hour)
+    $reset_token = bin2hex(random_bytes(32));
+    $expiry = date('Y-m-d H:i:s', strtotime('+1 hour'));
+    
+    $update = $pdo->prepare("UPDATE users SET reset_token = ?, reset_token_expiry = ? WHERE id = ?");
+    $update->execute([$reset_token, $expiry, $user['id']]);
+    
+    // In production, send this token via email
+    echo json_encode([
+        'message' => "Password reset token: $reset_token (valid for 1 hour). In production, this would be sent via email to the user."
+    ]);
+    exit;
+}
+
+// 4. POST /auth/reset-password
+if ($request_method === 'POST' && strpos($path, '/auth/reset-password') !== false) {
+    $input = json_decode(file_get_contents('php://input'), true);
+    
+    if (!isset($input['reset_token']) || !isset($input['new_password'])) {
+        http_response_code(400);
+        echo json_encode(['detail' => 'Reset token and new password are required']);
+        exit;
+    }
+    
+    $stmt = $pdo->prepare("SELECT * FROM users WHERE reset_token = ?");
+    $stmt->execute([$input['reset_token']]);
+    $user = $stmt->fetch();
+    
+    if (!$user) {
+        http_response_code(400);
+        echo json_encode(['detail' => 'Invalid or expired reset token']);
+        exit;
+    }
+    
+    // Check if token is expired
+    if (strtotime($user['reset_token_expiry']) < time()) {
+        http_response_code(400);
+        echo json_encode(['detail' => 'Reset token has expired']);
+        exit;
+    }
+    
+    // Update password
+    $new_password_hash = password_hash($input['new_password'], PASSWORD_DEFAULT);
+    $update = $pdo->prepare("UPDATE users SET password_hash = ?, reset_token = NULL, reset_token_expiry = NULL WHERE id = ?");
+    $update->execute([$new_password_hash, $user['id']]);
+    
+    echo json_encode(['message' => 'Password has been reset successfully']);
+    exit;
+}
+
 // ---------------------------------------------------------
 // PROTECTED ROUTES (Auth Required)
 // ---------------------------------------------------------
